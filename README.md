@@ -69,6 +69,10 @@ clip encoded at 25 fps plays at its original speed.
 | Frame rate | 25 fps, fixed in the firmware |
 | Frame budget | one JPEG frame must stay below 115200 bytes (`MJPEG_BUFFER_SIZE`); 240×240 uses ~5–20 KB |
 
+A frame that does not fit aborts the pass: the panel shows `VIDEO TOO LARGE` and
+the serial log prints `frame larger than mjpeg buffer (...)`. Nothing is written
+past the buffer, the clip simply cannot be played.
+
 The `sdcard/` folder in this repository is only a staging copy — the card itself
 needs the file in its root.
 

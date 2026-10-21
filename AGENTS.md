@@ -112,6 +112,10 @@ a power cycle recovers it.
   `NO VIDEO FILE`, `OUT OF MEMORY`).
 * `MjpegClass` reads `/video1.mjpeg` from the card root. Vendor content lives in
   a `sdcard/` folder on the card and has to be copied to the root.
+* `readMjpegBuf()` copies a frame into the 115 KB MJPEG buffer and aborts the
+  pass when the frame does not fit, instead of writing past the end of it. The
+  panel then shows `VIDEO TOO LARGE`; the serial log names the offsets. Keep
+  frames at 240×240 (5-20 KB); the `-q:v` recipes in `README.md` produce that.
 * The frame pacing is the vendor's: a schedule based on
   `start_ms + frame * 1000 / FPS` with `FPS 25`, so it catches up by skipping
   frames. Per-pass statistics are printed once instead of a line per skipped

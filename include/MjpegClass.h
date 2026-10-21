@@ -21,11 +21,12 @@ class MjpegClass
 {
 public:
   bool setup(
-      Stream *input, uint8_t *mjpeg_buf, JPEG_DRAW_CALLBACK *pfnDraw, bool useBigEndian,
-      int x, int y, int widthLimit, int heightLimit)
+      Stream *input, uint8_t *mjpeg_buf, size_t mjpeg_buf_size, JPEG_DRAW_CALLBACK *pfnDraw,
+      bool useBigEndian, int x, int y, int widthLimit, int heightLimit)
   {
     _input = input;
     _mjpeg_buf = mjpeg_buf;
+    _mjpeg_buf_size = mjpeg_buf_size;
     _pfnDraw = pfnDraw;
     _useBigEndian = useBigEndian;
     _x = x;
@@ -33,6 +34,7 @@ public:
     _widthLimit = widthLimit;
     _heightLimit = heightLimit;
     _inputindex = 0;
+    _frame_too_large = false;
 
     // setup() runs once per played file, so reuse the read buffer instead of
     // allocating a new one on every pass (that leaked 1 KB per loop).
@@ -102,6 +104,15 @@ public:
         }
 
         // Serial.printf("i: %d\n", i);
+        if ((size_t)_mjpeg_buf_offset + (size_t)i > _mjpeg_buf_size)
+        {
+          // A single frame is larger than the buffer. Without this check the
+          // memcpy below would write past the end of the heap buffer.
+          _frame_too_large = true;
+          Serial.printf("frame larger than mjpeg buffer (%d + %d > %u bytes), pass aborted\n",
+                        (int)_mjpeg_buf_offset, (int)i, (unsigned)_mjpeg_buf_size);
+          return false;
+        }
         memcpy(_mjpeg_buf + _mjpeg_buf_offset, _p, i);
         _mjpeg_buf_offset += i;
         size_t o = _buf_read - i;
@@ -130,6 +141,13 @@ public:
     }
 
     return false;
+  }
+
+  // True when the last readMjpegBuf() call stopped because a single frame is
+  // larger than the buffer it would be copied into.
+  bool frameTooLarge() const
+  {
+    return _frame_too_large;
   }
 
   bool drawJpg()
@@ -190,7 +208,9 @@ private:
   int _heightLimit;
 
   uint8_t *_read_buf = nullptr;
+  size_t _mjpeg_buf_size = 0;
   int32_t _mjpeg_buf_offset = 0;
+  bool _frame_too_large = false;
 
   JPEGDEC _jpeg;
   int _scale = -1;

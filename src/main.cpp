@@ -169,7 +169,7 @@ static bool playVideo()
   }
 
   if (!mjpeg.setup(
-          &vFile, mjpeg_buf, drawMCU, true /* useBigEndian */,
+          &vFile, mjpeg_buf, MJPEG_BUFFER_SIZE, drawMCU, true /* useBigEndian */,
           0 /* x */, 0 /* y */, gfx->width() /* widthLimit */, gfx->height() /* heightLimit */))
   {
     Serial.println("mjpeg.setup failed, out of memory");
@@ -220,6 +220,14 @@ static bool playVideo()
                 frames_shown ? total_decode_video_ms / frames_shown : 0,
                 frames_shown ? total_show_video_ms / frames_shown : 0,
                 (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+
+  // The frame scanner stopped because a single frame does not fit into the
+  // mjpeg buffer, so the clip cannot be played at all.
+  if (mjpeg.frameTooLarge())
+  {
+    showMessage("VIDEO TOO LARGE", "use 240x240 JPG frames");
+    return false;
+  }
 
   return true;
 }
