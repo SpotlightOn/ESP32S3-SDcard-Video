@@ -14,8 +14,9 @@
 #define FPS 25
 #define MJPEG_BUFFER_SIZE (240 * 240 * 4 / 2)
 
-// Panel SPI clock. The weather clock project for this board runs the GC9A01 at
-// 40 MHz; the vendor demo used 80 MHz. Override with -DLCD_SPI_HZ=...
+// Panel SPI clock. 40 MHz is verified on this board (24.3 fps, 0 skipped
+// frames); the vendor demo used 80 MHz, which was never measured here.
+// Override with -DLCD_SPI_HZ=...
 #ifndef LCD_SPI_HZ
 #define LCD_SPI_HZ 40000000
 #endif
@@ -139,6 +140,11 @@ static bool sdCardIsReadable()
   return readable;
 }
 
+// Pixel buffer for one MJPEG frame. Allocated once: allocating and freeing
+// ~115 KB per loop fragments the heap and eventually makes the allocation fail,
+// which is what produced the late "OUT OF MEMORY" message.
+static uint8_t *mjpeg_buf = nullptr;
+
 static bool playVideo()
 {
   File vFile = SD_MMC.open(MJPEG_FILENAME);
@@ -149,18 +155,28 @@ static bool playVideo()
     return false;
   }
 
-  uint8_t *mjpeg_buf = (uint8_t *)malloc(MJPEG_BUFFER_SIZE);
-  if (!mjpeg_buf)
+  if (mjpeg_buf == nullptr)
   {
-    Serial.println("mjpeg_buf malloc failed!");
-    vFile.close();
-    showMessage("OUT OF MEMORY", "mjpeg buffer");
-    return false;
+    mjpeg_buf = (uint8_t *)malloc(MJPEG_BUFFER_SIZE);
+    if (mjpeg_buf == nullptr)
+    {
+      Serial.printf("mjpeg_buf malloc failed, %u bytes free, largest block %u\n",
+                    (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+      vFile.close();
+      showMessage("OUT OF MEMORY", "mjpeg buffer");
+      return false;
+    }
   }
 
-  mjpeg.setup(
-      &vFile, mjpeg_buf, drawMCU, true /* useBigEndian */,
-      0 /* x */, 0 /* y */, gfx->width() /* widthLimit */, gfx->height() /* heightLimit */);
+  if (!mjpeg.setup(
+          &vFile, mjpeg_buf, drawMCU, true /* useBigEndian */,
+          0 /* x */, 0 /* y */, gfx->width() /* widthLimit */, gfx->height() /* heightLimit */))
+  {
+    Serial.println("mjpeg.setup failed, out of memory");
+    vFile.close();
+    showMessage("OUT OF MEMORY", "mjpeg read buffer");
+    return false;
+  }
 
   start_ms = millis();
   curr_ms = millis();
@@ -194,16 +210,16 @@ static bool playVideo()
   }
 
   // Clean up
-  free(mjpeg_buf);
   vFile.close();
 
   unsigned long elapsed = millis() - start_ms;
-  Serial.printf("played %lu frames in %lu ms (%lu skipped), %.1f fps, read %lu ms, decode %lu ms, show %lu ms per frame\n",
+  Serial.printf("played %lu frames in %lu ms (%lu skipped), %.1f fps, read %lu ms, decode %lu ms, show %lu ms per frame, heap %u, largest block %u\n",
                 frames_shown, elapsed, frames_skipped,
                 elapsed ? (float)frames_shown * 1000.0f / (float)elapsed : 0.0f,
                 frames_shown ? total_read_video_ms / frames_shown : 0,
                 frames_shown ? total_decode_video_ms / frames_shown : 0,
-                frames_shown ? total_show_video_ms / frames_shown : 0);
+                frames_shown ? total_show_video_ms / frames_shown : 0,
+                (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
 
   return true;
 }

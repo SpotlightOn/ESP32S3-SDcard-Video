@@ -31,6 +31,10 @@ IDE package (`main/main.ino` + bundled `libraries/`).
    because the tooling writes absolute paths into it.
 6. Keep `README.md` (user facing) and this file in sync when build steps, pins,
    timings or failure messages change.
+7. **This is a standalone project.** Do not reference sibling projects (names,
+   their configuration files, credentials or quirks) in code, comments, docs or
+   commits. Board facts must be stated as measured facts of this project, not as
+   "the other firmware does it this way".
 
 ## Layout
 
@@ -42,7 +46,7 @@ IDE package (`main/main.ino` + bundled `libraries/`).
 | `include/MjpegClass.h` | MJPEG/JPEGDEC wrapper (was `main/MjpegClass.h`) |
 | `sdcard/video1.mjpeg` | Sample clip, 290 frames, 25 fps, 11.6 s |
 | `tools/display_check/` | Standalone panel + SD test, own `platformio.ini` |
-| `opencode.jsonc` | Agent permissions (inherited from the weather clock project) |
+| `opencode.jsonc` | Agent permissions: blocks reading or editing local credentials |
 
 ## Build, flash, monitor
 
@@ -112,8 +116,18 @@ a power cycle recovers it.
   `start_ms + frame * 1000 / FPS` with `FPS 25`, so it catches up by skipping
   frames. Per-pass statistics are printed once instead of a line per skipped
   frame.
+* **Heap stability is part of the contract.** Two allocations used to run once
+  per pass and made the player die with `OUT OF MEMORY` after 10-15 minutes:
+  `MjpegClass::setup()` allocated a 1 KB read buffer on every call and never
+  freed it, and the 115 KB MJPEG buffer was allocated and freed per pass, so
+  the leaked 1 KB blocks fragmented exactly the region the next big block
+  needed. Both buffers are now allocated once; the stats line prints
+  `heap` and `largest block` so a regression shows up immediately. Verified
+  over 36 consecutive passes: `heap 205464, largest block 172020`, unchanged.
 * Registry versions: Arduino_GFX `1.4.9` (vendor version), JPEGDEC `1.8.4`
-  (vendor had 1.6.1, which is not published; 1.8.4 keeps the API).
+  (vendor had 1.6.1, which is not published; 1.8.4 keeps the API). JPEGDEC
+  itself allocates no heap (no `malloc`/`free` in the library), so it cannot
+  leak.
 
 ## Conventions
 

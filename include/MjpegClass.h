@@ -34,9 +34,14 @@ public:
     _heightLimit = heightLimit;
     _inputindex = 0;
 
-    _read_buf = (uint8_t *)malloc(READ_BUFFER_SIZE);
+    // setup() runs once per played file, so reuse the read buffer instead of
+    // allocating a new one on every pass (that leaked 1 KB per loop).
+    if (_read_buf == nullptr)
+    {
+      _read_buf = (uint8_t *)malloc(READ_BUFFER_SIZE);
+    }
 
-    return true;
+    return _read_buf != nullptr;
   }
 
   bool readMjpegBuf()
@@ -184,7 +189,7 @@ private:
   int _widthLimit;
   int _heightLimit;
 
-  uint8_t *_read_buf;
+  uint8_t *_read_buf = nullptr;
   int32_t _mjpeg_buf_offset = 0;
 
   JPEGDEC _jpeg;
