@@ -3,6 +3,9 @@
 Plays `video1.mjpeg` from the microSD card in an endless loop on the round
 GC9A01 display (240×240) of the Spotpear ESP32-S3 1.28" BOX board.
 
+Original firmware and manufacturer page:
+<https://spotpear.com/wiki/ESP32-S3-N16R8-AI-DeepSeek-XiaoZhi-XiaGe-Qwen-DouBao-1.28-inch-Round-LCD-BOX-TouchScreen.html>
+
 ## Layout
 
 ```
